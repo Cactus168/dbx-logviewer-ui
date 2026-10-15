@@ -1,0 +1,11 @@
+{
+  "algorithm": "sha256",
+  "files": {
+    "assets/plugin.svg": "22ea815f4c6b95e6dc28c6434c957e9c930ac7d1fc044538093b0996f354081d",
+    "bin/windows-x64/dbx-plugin-dbx-logviewer.exe": "38c20042940c6a6fec435eb529e38525532957d199484cfe8b42dc57305f2207",
+    "manifest.json": "36d6904ff337b947b061a0c4053c98f4d0db8bbd1a8bcf33b5d2f7d9d116a63c",
+    "ui/app.js": "e74c25207cb127fddf5447ce43a6ad5c85d1e49c74d5bcaa59325956c2de60b6",
+    "ui/index.html": "cd359efdbabbb6e4b421734cd6a47205c8a3f89a50e6786d5a6dfb39e5f62968",
+    "ui/style.css": "e325bb9eba744d0c451da237b41c07b90af569b2686a3cea1918033e19359795"
+  }
+}

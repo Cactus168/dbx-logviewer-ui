@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>日志查看器</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="hero">
+  <div class="hero-icon">📋</div>
+  <div class="hero-text"><h1>日志查看器</h1><p id="heroSub">选择左侧文件开始查看</p></div>
+  <div class="hero-status" id="status"><span class="dot"></span><span id="statusText">实时通道未连接</span></div>
+  <button id="toggleSidebar" class="theme-btn" title="收起/展开文件栏 (Ctrl+B)">☰</button>
+  <button id="themeBtn" class="theme-btn" title="选择主题">🎨</button>
+  <button id="cmdBtn" class="theme-btn" title="命令面板 (Ctrl+K)">⌘</button>
+  <div id="themePanel" class="theme-panel" hidden>
+    <div class="theme-opt" data-t="dbx"><span class="dot" style="background:#fafafa"></span>🖥️ DBX 原生</div>
+    <div class="theme-opt" data-t="auto"><span class="dot" style="background:linear-gradient(135deg,#6d5dfc,#2cc9a7)"></span>🔄 跟随</div>
+    <div class="theme-opt" data-t="light"><span class="dot" style="background:#f4f4fb"></span>☀️ 纸白</div>
+    <div class="theme-opt" data-t="dark"><span class="dot" style="background:#13131a"></span>🌙 午夜</div>
+    <div class="theme-opt" data-t="forest"><span class="dot" style="background:#0d1512"></span>🌲 墨绿</div>
+    <div class="theme-opt" data-t="ocean"><span class="dot" style="background:#0f1a2e"></span>🌊 深海</div>
+    <div class="theme-opt" data-t="sunset"><span class="dot" style="background:#1c1410"></span>🌇 黄昏</div>
+    <div class="theme-opt" data-t="mint"><span class="dot" style="background:#eef7f3"></span>🌿 薄荷</div>
+    <div class="theme-sep"></div>
+    <div class="theme-sec">特效</div>
+    <div class="theme-opt fx-opt" data-fx="flow"><span class="check">✓</span>✨ 实时流光</div>
+    <div class="theme-opt fx-opt" data-fx="dist"><span class="check">✓</span>📊 级别分布</div>
+    <div class="theme-opt fx-opt" data-fx="skel"><span class="check">✓</span>⏳ 骨架屏</div>
+    <div class="theme-opt fx-opt" data-fx="keys"><span class="check">✓</span>⌨️ 快捷键提示</div>
+    <div class="theme-opt fx-opt" data-fx="struct"><span class="check">✓</span>🎨 结构着色</div>
+  </div>
+</header>
+
+<main class="main">
+  <!-- 左侧：文件浏览栏 -->
+  <aside class="sidebar card" id="fileCard">
+    <h2 class="collhead" id="fileHead">📁 日志文件<span class="collsum" id="fileSum"></span></h2>
+    <div class="collbody" id="fileBody">
+      <div id="crumb"></div>
+      <div class="toolbar">
+        <input id="fileFilter" placeholder="过滤文件名" />
+        <select id="fileSort">
+          <option value="time">按时间</option>
+          <option value="name">按名称</option>
+          <option value="size">按大小</option>
+        </select>
+        <button id="refresh" class="ghost sm">↻</button>
+      </div>
+      <div id="dirs"></div>
+      <div id="files"><span class="hint">连接后自动列出…</span></div>
+      <div id="hiddenbar"></div>
+    </div>
+  </aside>
+
+  <!-- 右侧：搜索 + 日志 -->
+  <section class="main-content">
+    <!-- 搜索工具栏 -->
+    <div class="card search-card" id="searchCard">
+      <h2 class="collhead" id="searchHead">🔍 搜索条件<span class="collsum" id="searchSum"></span></h2>
+      <div class="collbody" id="searchBody">
+        <div class="search-row">
+          <input id="keyword" class="kw-input" placeholder="搜索关键字，勾正则用表达式" />
+          <label class="inline-check"><input id="regexCk" type="checkbox" /> 正则</label>
+          <select id="level">
+            <option value="ALL">全部级别</option>
+            <option>ERROR</option>
+            <option>WARN</option>
+            <option>INFO</option>
+            <option>DEBUG</option>
+            <option>TRACE</option>
+          </select>
+          <input id="start" type="datetime-local" class="time-input" title="开始时间" />
+          <input id="end" type="datetime-local" class="time-input" title="结束时间（留空=至今）" />
+          <select id="sort">
+            <option value="desc">最新在前</option>
+            <option value="asc">最早在前</option>
+          </select>
+          <select id="pageSize">
+            <option>50</option>
+            <option selected>100</option>
+            <option>200</option>
+            <option>500</option>
+          </select>
+          <select id="context">
+            <option value="0">仅命中行</option>
+            <option value="2">前后 2 行</option>
+            <option value="5">前后 5 行</option>
+            <option value="10">前后 10 行</option>
+          </select>
+        </div>
+        <div class="search-row">
+          <div class="quick-btns" id="quickrow">
+            <button class="ghost sm" data-min="10">近10分钟</button>
+            <button class="ghost sm" data-min="60">近1小时</button>
+            <button class="ghost sm" data-min="4320">近3天</button>
+            <button class="ghost sm" data-min="10080">近1周</button>
+            <button class="ghost sm" id="clearTime">清空时间</button>
+          </div>
+          <div class="action-btns">
+            <button id="search" class="primary-btn">🔍 搜索</button>
+            <button id="download" class="green">⬇ 下载</button>
+            <button id="tail" class="orange">⏱ 实时监控</button>
+            <label class="inline-check"><input id="autoscroll" type="checkbox" checked /> 自动滚动</label>
+          </div>
+        </div>
+        <div class="hint" id="info"></div>
+      </div>
+    </div>
+
+    <!-- 日志显示区 -->
+    <div class="card log-card">
+      <div class="logbar">
+        <div id="loghead">未选择文件<span id="rate"></span></div>
+        <button id="sortBtn" class="ghost sm" title="切换排序">⇅</button>
+        <button id="wrapBtn" class="ghost sm" title="切换自动换行">↵ 换行</button>
+      </div>
+      <div id="distbar" class="distbar" hidden><span class="e"></span><span class="w"></span><span class="n"></span></div>
+      <div id="logs"></div>
+      <div id="pager">
+        <button id="prev" class="ghost sm">← 上一页</button>
+        <span id="pageinfo"></span>
+        <button id="next" class="ghost sm">下一页 →</button>
+      </div>
+      <div class="hint kbd-hint">快捷键：<kbd>/</kbd> 搜索 <kbd>t</kbd> 实时 <kbd>←</kbd><kbd>→</kbd> 翻页 <kbd>Ctrl+K</kbd> 命令</div>
+    </div>
+  </section>
+</main>
+
+<div id="cmdMask" class="cmd-mask" hidden><div class="cmd-box"><input id="cmdInput" placeholder="输入命令或文件名…" autocomplete="off" /><div id="cmdList"></div></div></div>
+<script src="app.js"></script>
+</body>
+</html>
