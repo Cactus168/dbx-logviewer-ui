@@ -299,18 +299,19 @@ setInterval(() => {
   rateN = 0;
 }, 1000);
 function syncSortBtn() {
-  const b = $("sortBtn");
-  if (b) b.textContent = $("sort").value === "asc" ? "⇅ 最早在前" : "⇅ 最新在前";
+  const b = $("sortBtn"), s = $("sort");
+  if (b && s) b.textContent = s.value === "asc" ? "⇅ 最早在前" : "⇅ 最新在前";
 }
 function syncWrapBtn() {
-  const on = $("logs").classList.contains("wrap"), b = $("wrapBtn");
-  if (b) b.textContent = on ? "↵ 换行：开" : "↵ 换行：关";
+  const logs = $("logs"), b = $("wrapBtn");
+  if (logs && b) b.textContent = logs.classList.contains("wrap") ? "↵ 换行：开" : "↵ 换行：关";
 }
 // 折叠：双卡片默认收起，状态记 storage；摘要行展示关键状态
-let coll = { file: true, search: true };
+let coll = { file: true, search: true, sidebar: false };
 function applyColl() {
-  $("fileCard").classList.toggle("collapsed", coll.file);
-  $("searchCard").classList.toggle("collapsed", coll.search);
+  $("fileCard")?.classList.toggle("collapsed", coll.file);
+  $("searchCard")?.classList.toggle("collapsed", coll.search);
+  document.querySelector(".main")?.classList.toggle("sidebar-hidden", coll.sidebar);
   syncSums();
 }
 function syncSums() {
@@ -326,7 +327,7 @@ async function loadColl() {
   let had = false;
   try { if (window.dbxPlugin.capabilities.storage) {
     const c = await window.dbxPlugin.storage.get("uicoll");
-    if (c && typeof c.file === "boolean") { coll = c; had = true; }
+    if (c && typeof c.file === "boolean") { coll = { ...coll, ...c }; had = true; }
   } } catch {}
   applyColl();
   return had;
@@ -409,29 +410,31 @@ function onBackendEvent(e) {
   }
 }
 window.addEventListener("DOMContentLoaded", async () => {
-  $("search").onclick = () => { state.page = 1; doSearch().catch(e => $("info").textContent = "搜索失败：" + e.message); };
-  $("refresh").onclick = () => loadBrowse().catch(e => $("info").textContent = "刷新失败：" + e.message);
-  $("fileFilter").oninput = e => { state.fileFilter = e.target.value; renderFiles(); };
-  $("fileSort").onchange = e => { state.fileSort = e.target.value; renderFiles(); };
+  // 安全绑定：元素不存在则跳过，不中断后续绑定
+  const bind = (id, evt, fn) => { const el = $(id); if (el) el[evt] = fn; };
+  bind("search", "onclick", () => { state.page = 1; doSearch().catch(e => $("info").textContent = "搜索失败：" + e.message); });
+  bind("refresh", "onclick", () => loadBrowse().catch(e => $("info").textContent = "刷新失败：" + e.message));
+  bind("fileFilter", "oninput", e => { state.fileFilter = e.target.value; renderFiles(); });
+  bind("fileSort", "onchange", e => { state.fileSort = e.target.value; renderFiles(); });
   document.querySelectorAll("#quickrow [data-min]").forEach(b => b.onclick = () => setQuick(+b.dataset.min));
-  $("clearTime").onclick = () => { $("start").value = ""; $("end").value = ""; };
-  $("prev").onclick = () => { if (state.page > 1) { state.page--; doSearch().catch(e => $("info").textContent = e.message); } };
-  $("next").onclick = () => { state.page++; doSearch().catch(e => { state.page--; $("info").textContent = e.message; }); };
-  $("tail").onclick = () => toggleTail().catch(e => $("info").textContent = "实时监控失败：" + e.message);
-  $("download").onclick = doDownload;
+  bind("clearTime", "onclick", () => { $("start").value = ""; $("end").value = ""; });
+  bind("prev", "onclick", () => { if (state.page > 1) { state.page--; doSearch().catch(e => $("info").textContent = e.message); } });
+  bind("next", "onclick", () => { state.page++; doSearch().catch(e => { state.page--; $("info").textContent = e.message; }); });
+  bind("tail", "onclick", () => toggleTail().catch(e => $("info").textContent = "实时监控失败：" + e.message));
+  bind("download", "onclick", doDownload);
   // 日志头开关：排序与下拉双向同步并重搜；换行切 class 并随条件记住
   syncSortBtn(); syncWrapBtn();
-  $("sortBtn").onclick = () => { $("sort").value = $("sort").value === "asc" ? "desc" : "asc";
-    syncSortBtn(); state.page = 1; doSearch().catch(e => $("info").textContent = e.message); };
-  $("sort").onchange = syncSortBtn;
-  $("wrapBtn").onclick = () => { $("logs").classList.toggle("wrap"); syncWrapBtn(); saveCond(); };
-  $("fileHead").onclick = () => { coll.file = !coll.file; applyColl(); saveColl(); };
-  $("searchHead").onclick = () => { coll.search = !coll.search; applyColl(); saveColl(); };
+  bind("sortBtn", "onclick", () => { $("sort").value = $("sort").value === "asc" ? "desc" : "asc";
+    syncSortBtn(); state.page = 1; doSearch().catch(e => $("info").textContent = e.message); });
+  bind("sort", "onchange", syncSortBtn);
+  bind("wrapBtn", "onclick", () => { $("logs").classList.toggle("wrap"); syncWrapBtn(); saveCond(); });
+  bind("fileHead", "onclick", () => { coll.file = !coll.file; applyColl(); saveColl(); });
+  bind("searchHead", "onclick", () => { coll.search = !coll.search; applyColl(); saveColl(); });
   // 侧边栏收起/展开
-  $("toggleSidebar").onclick = () => document.querySelector(".main").classList.toggle("sidebar-hidden");
-  $("themeBtn").onclick = e => { e.stopPropagation(); toggleThemePanel(); };
-  $("themePanel").onclick = e => { const o = e.target.closest(".theme-opt");
-    if (o) { applyTheme(o.dataset.t); saveTheme(); toggleThemePanel(false); } };
+  bind("toggleSidebar", "onclick", () => { coll.sidebar = !coll.sidebar; applyColl(); saveColl(); });
+  bind("themeBtn", "onclick", e => { e.stopPropagation(); toggleThemePanel(); });
+  bind("themePanel", "onclick", e => { const o = e.target.closest(".theme-opt");
+    if (o) { applyTheme(o.dataset.t); saveTheme(); toggleThemePanel(false); } });
   // 点面板外关闭（按钮自身已 stopPropagation，不冲突）
   document.addEventListener("click", e => { const p = $("themePanel");
     if (p && !p.hidden && !e.target.closest("#themePanel,#themeBtn")) toggleThemePanel(false); });
@@ -440,27 +443,27 @@ window.addEventListener("DOMContentLoaded", async () => {
     e.stopPropagation(); fx[o.dataset.fx] = !fx[o.dataset.fx]; applyFx(); saveFx();
   });
   // 命令面板：按钮 + 输入过滤 + 上下回车 + 遮罩点击关闭
-  $("cmdBtn").onclick = e => { e.stopPropagation(); toggleCmd(); };
-  $("cmdInput").oninput = renderCmd;
-  $("cmdInput").onkeydown = e => {
+  bind("cmdBtn", "onclick", e => { e.stopPropagation(); toggleCmd(); });
+  bind("cmdInput", "oninput", renderCmd);
+  bind("cmdInput", "onkeydown", e => {
     if (e.key === "ArrowDown") { e.preventDefault(); cmdMove(1); }
     else if (e.key === "ArrowUp") { e.preventDefault(); cmdMove(-1); }
     else if (e.key === "Enter") { const it = cmdItems[cmdSel]; toggleCmd(false); if (it) it.run(); }
-  };
-  $("cmdList").onclick = e => { const o = e.target.closest(".cmd-item");
-    if (o) { const it = cmdItems[+o.dataset.i]; toggleCmd(false); if (it) it.run(); } };
-  $("cmdMask").onclick = e => { if (e.target === $("cmdMask")) toggleCmd(false); };
+  });
+  bind("cmdList", "onclick", e => { const o = e.target.closest(".cmd-item");
+    if (o) { const it = cmdItems[+o.dataset.i]; toggleCmd(false); if (it) it.run(); } });
+  bind("cmdMask", "onclick", e => { if (e.target === $("cmdMask")) toggleCmd(false); });
   // 全局快捷键：Ctrl+K 命令，Esc 关闭浮层；输入框内只响应 Esc
   document.addEventListener("keydown", e => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); toggleCmd(); return; }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") { e.preventDefault(); $("toggleSidebar").click(); return; }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") { e.preventDefault(); $("toggleSidebar")?.click(); return; }
     if (e.key === "Escape") { toggleCmd(false); toggleThemePanel(false); return; }
     const tag = document.activeElement && document.activeElement.tagName;
     if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
-    if (e.key === "/") { e.preventDefault(); $("keyword").focus(); }
-    else if (e.key === "t" && !e.ctrlKey && !e.metaKey) { $("tail").click(); }
-    else if (e.key === "ArrowLeft") { $("prev").click(); }
-    else if (e.key === "ArrowRight") { $("next").click(); }
+    if (e.key === "/") { e.preventDefault(); $("keyword")?.focus(); }
+    else if (e.key === "t" && !e.ctrlKey && !e.metaKey) { $("tail")?.click(); }
+    else if (e.key === "ArrowLeft") { $("prev")?.click(); }
+    else if (e.key === "ArrowRight") { $("next")?.click(); }
   });
   if (!window.dbxPlugin) { $("info").textContent = "不在 DBX 宿主内：请经 DBX 工作台或 dbx-plugin dev 打开"; return; }
   await window.dbxPlugin.ready;
