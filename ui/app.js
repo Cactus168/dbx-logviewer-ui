@@ -7,9 +7,31 @@ const fmtTime = t => t ? new Date(t*1000).toLocaleString("zh-CN",{hour12:false})
 // datetime-local(2026-08-30T11:04)→后端宽松解析(2026-08-30 11:04:20)：补秒+空格
 const normTime = v => v ? v.replace("T"," ").slice(0,16)+":00" : "";
 
+// 连接级瞬时错误：后端 channel 断开/重建时重试可恢复
+const RETRYABLE_ERR = /sender dropped|UnexpectedBehavior|channel\s*(closed|disconnected|broken)|connection\s*(reset|refused|closed)|broken pipe|EOF|timed? ?out/i;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function invoke(method, params, options={timeoutMs:60000}) {
   if (!state.connId) throw new Error("无连接上下文：请从连接入口打开工作台");
-  return window.dbxPlugin.invoke(method, { connectionId: state.connId, ...params }, options);
+  let lastErr;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      return await window.dbxPlugin.invoke(method, { connectionId: state.connId, ...params }, options);
+    } catch (e) {
+      lastErr = e;
+      const msg = String(e && (e.message || e) || "");
+      // 连接级错误：短退避后重试一次；失败的请求没有副作用（下载靠 nextOffset 推进，重发同 offset 安全）
+      if (attempt < 2 && RETRYABLE_ERR.test(msg)) {
+        await sleep(400 * attempt);
+        continue;
+      }
+      // 不可重试错误或重试耗尽：包装成友好提示
+      if (RETRYABLE_ERR.test(msg)) {
+        throw new Error("后端通道已断开（可能连接超时），已自动重试仍失败。请关闭并重新打开此工作台重建连接。");
+      }
+      throw e;
+    }
+  }
+  throw lastErr;
 }
 function lineHtml(no, text, fresh, isCtx) {
   let h = esc(text);
@@ -60,10 +82,13 @@ function renderDistbar(lines) {
 }
 async function loadBrowse(dir) {
   if (dir !== undefined) state.dir = dir;
+  const seq = ++loadBrowse.seq; // 竞态保护：旧请求结果不覆盖新请求
   const r = await invoke("logs/browse", { dir: state.dir });
+  if (seq !== loadBrowse.seq) return;
   state.dirs = r.dirs; state.files = r.entries;
   renderCrumb(); renderDirs(); renderFiles();
 }
+loadBrowse.seq = 0;
 // 面包屑：根 + 各级，可点回退；换目录时清空选中
 function renderCrumb() {
   const parts = state.dir === "/" ? ["/"] : state.dir ? state.dir.split("/") : [];
@@ -149,6 +174,7 @@ function setQuick(min) {
 }
 async function doSearch() {
   if (!state.file) { $("info").textContent = "请先选择日志文件"; return; }
+  const seq = ++doSearch.seq; // 竞态保护：快速切换文件/翻页时，旧请求结果不覆盖新结果
   // 骨架屏：等待期间占位（关特效则直接空白等待）
   if (fx.skel) $("logs").innerHTML = '<div class="skel"></div>'.repeat(8);
   try {
@@ -156,14 +182,16 @@ async function doSearch() {
       regex: $("regexCk").checked, context: +$("context").value,
       level: $("level").value, startTime: normTime($("start").value), endTime: normTime($("end").value),
       page: state.page, pageSize: +$("pageSize").value, sort: $("sort").value });
+    if (seq !== doSearch.seq) return; // 已有更新的请求，丢弃本次结果
     state.total = r.total; render(r.lines);
     $("loghead").innerHTML = `${esc(state.file)}（共 ${r.total} 行${r.truncated ? "，已截断" : ""}）<span id="rate"></span>`;
     $("heroSub").textContent = `${state.file} · 共 ${r.total} 行`;
     $("info").textContent = "";
     pushHistKw($("keyword").value); // 成功搜索的关键字记入命令面板历史
     saveCond(); syncSums(); // 搜成功才记条件，避免脏条件污染
-  } catch (e) { $("logs").innerHTML = ""; $("info").textContent = "搜索失败：" + e.message; }
+  } catch (e) { if (seq === doSearch.seq) { $("logs").innerHTML = ""; $("info").textContent = "搜索失败：" + e.message; } }
 }
+doSearch.seq = 0;
 // 多主题：id 存 storage 持久化；auto 跟随宿主，其余走 data-theme 变量覆盖
 const THEMES = [
   { id: "dbx", name: "DBX 原生", icon: "🖥️", dot: "#fafafa" },
